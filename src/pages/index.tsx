@@ -4,16 +4,11 @@ import Head from "next/head";
 import Image from "next/image";
 import Link from "next/link";
 import dayjs from "dayjs";
+import { LoadingPage } from "~/components/loading";
 import relativeTime from "dayjs/plugin/relativeTime";
-import {
-  SignInButton,
-  SignIn,
-  SignedOut,
-  useUser,
-  useClerk,
-} from "@clerk/nextjs";
+import { SignInButton, useUser, useClerk } from "@clerk/nextjs";
 import { api } from "~/utils/api";
-import { postsRouter } from "../server/api/routers/posts";
+import { TRPCError } from "@trpc/server";
 type PostWithUser = RouterOutputs["example"]["getAll"][number];
 const PostView = (props: { post: PostWithUser }) => {
   const { post, author } = props;
@@ -28,13 +23,14 @@ const PostView = (props: { post: PostWithUser }) => {
       />
       <div className="flex flex-col">
         <div className="flex gap-1 text-slate-300">
-          <Link href={`/@${author.username}`}>
-            <span>{`@${author.username} `}</span>
+          <Link href={`/@${author.name}`}>
+            {console.log(post)}
+            <span>{`@${author.name} `}</span>
           </Link>
           <Link href={`/post/${post.id}`}>
-            <span className="font-thin">{` · ${dayjs(
+            {/* <span className="font-thin">{` · ${dayjs(
               post.createdAt
-            ).fromNow()}`}</span>
+            ).fromNow()}`}</span> */}
           </Link>
         </div>
         <span className="text-2xl">{post.content}</span>
@@ -42,11 +38,22 @@ const PostView = (props: { post: PostWithUser }) => {
     </div>
   );
 };
+const Feed = () => {
+  const { data, isLoading: postLoading } = api.example.getAll.useQuery();
+  if (postLoading) return <LoadingPage />;
+  if (!data) return <div>Something wen wrong</div>;
+  return (
+    <div className="posts flex-col  ">
+      {data?.map(({ post, author }) => (
+        <PostView post={post} author={author} />
+      ))}
+    </div>
+  );
+};
 const Home: NextPage = () => {
-  const { data } = api.example.getAll.useQuery();
-  console.log(data);
-  const user = useUser();
-  console.log("user1", user);
+  api.example.getAll.useQuery(); //start fetching asap
+  const { isLoaded: userLoaded, isSignedIn } = useUser();
+  if (!userLoaded) return <div />;
   const { signOut } = useClerk();
   return (
     <>
@@ -59,16 +66,10 @@ const Home: NextPage = () => {
         <div>
           <h1>Sign In</h1>
           <h1>hello</h1>
-          {!user.isSignedIn && <SignInButton />}
-          {!!user.isSignedIn && (
-            <button onClick={() => signOut()}>sign out</button>
-          )}
+          {!isSignedIn && <SignInButton />}
+          {!!isSignedIn && <button onClick={() => signOut()}>sign out</button>}
         </div>
-        <div className="posts flex-col  ">
-          {data?.map(({ post, author }) => (
-            <PostView post={post} author={author} />
-          ))}
-        </div>
+        <Feed />
       </main>
     </>
   );
