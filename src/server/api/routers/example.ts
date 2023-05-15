@@ -1,16 +1,41 @@
+import { clerkClient } from "@clerk/nextjs";
 import { z } from "zod";
-
+import type { User } from "@clerk/nextjs/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-
+import { postsRouter } from "./posts";
+import { profile } from "console";
+import { TRPCError } from "@trpc/server";
+const filterUserForClient = (user: User) => {
+  return {
+    id: user.id,
+    name: user.lastName,
+    profileImageUrl: user.profileImageUrl,
+  };
+};
 export const exampleRouter = createTRPCRouter({
-  hello: publicProcedure
-    .input(z.object({ text: z.string() }))
-    .query(({ input }) => {
+  getAll: publicProcedure.query(async ({ ctx }) => {
+    const posts = await ctx.prisma.post.findMany({ take: 100 });
+    const users = (
+      await clerkClient.users.getUserList({
+        userId: posts.map((post) => post.authorId),
+        limit: 100,
+      })
+    ).map(filterUserForClient);
+    console.log(users);
+
+    return posts.map((post) => {
+      const author = users.find((user) => user.id === post.authorId);
+      if (!author) {
+        console.error("AUTHOR NOT FOUND", post);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "author not found",
+        });
+      }
       return {
-        greeting: `Hello ${input.text}`,
+        post,
+        author,
       };
-    }),
-  getAll: publicProcedure.query(({ ctx }) => {
-    return ctx.prisma.post.findMany();
+    });
   }),
 });
