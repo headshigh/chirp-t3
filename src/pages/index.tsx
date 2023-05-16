@@ -8,7 +8,7 @@ import { LoadingPage } from "~/components/loading";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SignInButton, useUser, useClerk } from "@clerk/nextjs";
 import { api } from "~/utils/api";
-import { TRPCError } from "@trpc/server";
+import { useState } from "react";
 type PostWithUser = RouterOutputs["example"]["getAll"][number];
 const PostView = (props: { post: PostWithUser }) => {
   const { post, author } = props;
@@ -21,6 +21,7 @@ const PostView = (props: { post: PostWithUser }) => {
         width={56}
         height={56}
       />
+
       <div className="flex flex-col">
         <div className="flex gap-1 text-slate-300">
           <Link href={`/@${author.name}`}>
@@ -50,6 +51,31 @@ const Feed = () => {
     </div>
   );
 };
+const CreatePostWizard = () => {
+  const { user } = useUser();
+  const [input, setInput] = useState("");
+  if (!user) return null;
+  const ctx = api.useContext();
+  const { mutate, isLoading: isPosting } = api.example.create.useMutation({
+    onSuccess: () => {
+      setInput("");
+      void ctx.example.getAll.invalidate();
+    },
+  });
+  return (
+    <div>
+      <input
+        type="text "
+        placeholder="Type some emojis"
+        className="grow bg-transparent outline-none"
+        value={input}
+        disabled={isPosting}
+        onChange={(e) => setInput(e.target.value)}
+      />
+      <button onClick={() => mutate({ content: input })}>Post</button>
+    </div>
+  );
+};
 const Home: NextPage = () => {
   api.example.getAll.useQuery(); //start fetching asap
   const { isLoaded: userLoaded, isSignedIn } = useUser();
@@ -69,6 +95,7 @@ const Home: NextPage = () => {
           {!isSignedIn && <SignInButton />}
           {!!isSignedIn && <button onClick={() => signOut()}>sign out</button>}
         </div>
+        <CreatePostWizard />
         <Feed />
       </main>
     </>
